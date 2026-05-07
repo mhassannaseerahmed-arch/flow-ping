@@ -1,5 +1,11 @@
 # FlowPing
 
+Clone (after you publish to GitHub):
+
+```bash
+git clone https://github.com/<your-username>/flow-ping.git
+```
+
 Lightweight **email ops** for small teams: leads, merge-field templates, SMTP sending (or dry-run), send log, open/click tracking, and live dashboard updates (SSE).
 
 No database — JSON files under `server/data/`. Pair with **[Node](https://nodejs.org/)** + **Express** backend and **React** + **Vite** frontend.
