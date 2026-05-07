@@ -1,0 +1,10 @@
+[
+  {
+    "id": "demo_intro",
+    "name": "Demo intro template",
+    "subject": "Quick idea for {{ClinicName}}",
+    "bodyText": "Hi {{FirstName}},\n\nThis is a sample template — replace with your own messaging and merge fields.\n\n— Your name",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+]
