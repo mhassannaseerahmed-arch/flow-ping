@@ -1,9 +1,7 @@
 # FlowPing
 
-Clone (after you publish to GitHub):
-
 ```bash
-git clone https://github.com/<your-username>/flow-ping.git
+git clone https://github.com/mhassannaseerahmed-arch/flow-ping.git
 ```
 
 Lightweight **email ops** for small teams: leads, merge-field templates, SMTP sending (or dry-run), send log, open/click tracking, and live dashboard updates (SSE).
