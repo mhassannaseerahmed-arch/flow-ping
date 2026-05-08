@@ -4,7 +4,7 @@ node_modules/
 # Env and secrets
 .env
 .env.local
-*.local
+.env.*.local
 
 # Build
 dist/
@@ -13,9 +13,11 @@ build/
 # Local outreach data (may contain PII)
 server/data/leads.json
 server/data/sends.json
+server/data/sendStats.json
 
 # OS / editor
 .DS_Store
 *.swp
 .idea/
 .vscode/
+

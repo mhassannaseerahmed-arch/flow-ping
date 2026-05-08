@@ -25,6 +25,7 @@ campaignsRouter.post('/', (req, res) => {
     name: req.body?.name || 'New campaign',
     templateId: req.body?.templateId || null,
     leadIds: req.body?.leadIds || [],
+    automationEnabled: Boolean(req.body?.automationEnabled),
     createdAt: now,
     updatedAt: now,
   };

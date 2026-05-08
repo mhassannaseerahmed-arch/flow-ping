@@ -1,9 +1,9 @@
 import express from 'express';
-import { nanoid } from 'nanoid';
 import { readJson, writeJson } from '../storage.js';
 import { renderTemplate, deriveVars } from '../templateEngine.js';
-import { sendEmail } from '../mailer.js';
 import { publish } from '../realtime.js';
+import { sendTrackedEmailToLead } from '../sendOps.js';
+import { runFollowupPass } from '../automation.js';
 
 const SENDS_FILE = 'sends.json';
 const LEADS_FILE = 'leads.json';
@@ -18,91 +18,23 @@ function save(filename, rows) {
 
 export const sendsRouter = express.Router();
 
-// Simple follow-up worker (MVP): send 1 follow-up email after open if not already sent.
+// Follow-up worker: send follow-up #1 after open, then follow-up #2 after follow-up #1.
 // NOTE: "not replied" is not detected yet (reply tracking is Phase 2).
 // Configure:
 // - FOLLOWUP_AFTER_OPEN_HOURS (default 24)
 // - FOLLOWUP_SUBJECT (optional)
 // - FOLLOWUP_BODY_TEXT (optional)
+// - FOLLOWUP2_AFTER_FOLLOWUP1_HOURS (default 48)
+// - FOLLOWUP2_SUBJECT (optional)
+// - FOLLOWUP2_BODY_TEXT (optional)
+// - FOLLOWUP2_ONLY_IF_NO_CLICK (default true)
 sendsRouter.post('/followups/run', async (req, res) => {
-  const now = new Date();
-  const hours = Number(process.env.FOLLOWUP_AFTER_OPEN_HOURS || 24);
-  const cutoffMs = now.getTime() - hours * 60 * 60 * 1000;
-
-  const followupSubject = String(process.env.FOLLOWUP_SUBJECT || 'Quick follow-up');
-  const followupBodyText = String(
-    process.env.FOLLOWUP_BODY_TEXT ||
-      "Just following up on my previous note — happy to send the 1-page audit if you share the two numbers (avg daily appointments + rough no-show %)."
-  );
-
-  const sends = load(SENDS_FILE, []);
-  const leads = load(LEADS_FILE, []);
-
-  const results = [];
-  let sent = 0;
-  let skipped = 0;
-
-  for (let i = 0; i < sends.length; i += 1) {
-    const s = sends[i];
-    if (!s?.id) continue;
-    if (s.followup1SentAt) {
-      skipped += 1;
-      continue;
-    }
-    if (!s.lastOpenedAt || Number(s.openCount || 0) <= 0) {
-      skipped += 1;
-      continue;
-    }
-    const openedAtMs = Date.parse(s.lastOpenedAt);
-    if (!openedAtMs || openedAtMs > cutoffMs) {
-      skipped += 1;
-      continue;
-    }
-
-    const lead = leads.find((l) => l.id === s.leadId);
-    const to = lead?.email || s.to;
-    if (!to) {
-      skipped += 1;
-      continue;
-    }
-
-    try {
-      const sendResult = await sendEmail({
-        to,
-        subject: followupSubject,
-        text: followupBodyText,
-        html: `<div style="white-space:pre-wrap;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial">${escapeHtml(
-          followupBodyText
-        )}</div>`,
-      });
-
-      const status = sendResult.dryRun
-        ? 'dry-run'
-        : Array.isArray(sendResult.rejected) && sendResult.rejected.length > 0
-          ? 'failed'
-          : 'sent';
-
-      const nowIso = new Date().toISOString();
-      sends[i] = { ...s, followup1SentAt: nowIso, followup1Status: status, updatedAt: nowIso };
-      save(SENDS_FILE, sends);
-
-      publish('followup_sent', {
-        type: 'followup_sent',
-        sendId: s.id,
-        to,
-        subject: followupSubject,
-        status,
-        at: nowIso,
-      });
-
-      results.push({ ok: true, sendId: s.id, to, status });
-      sent += 1;
-    } catch (e) {
-      results.push({ ok: false, sendId: s.id, to, error: e?.message || 'follow-up failed' });
-    }
+  try {
+    const data = await runFollowupPass();
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e?.message || 'Follow-ups failed' });
   }
-
-  res.json({ success: true, data: { attempted: results.length, sent, skipped, hours, results } });
 });
 
 sendsRouter.get('/t/open/:id.gif', (req, res) => {
@@ -261,61 +193,13 @@ sendsRouter.post('/', async (req, res) => {
   if (!tpl) return res.status(404).json({ success: false, message: 'Template not found' });
   if (!lead.email) return res.status(400).json({ success: false, message: 'Lead has no email' });
 
-  const vars = { ...deriveVars(lead), ...(req.body?.vars || {}) };
-  const subject = renderTemplate(tpl.subject, vars);
-  const bodyText = renderTemplate(tpl.bodyText, vars);
-
-  const id = nanoid();
-  const baseUrl = String(process.env.TRACKING_BASE_URL || `http://localhost:${process.env.PORT || 5055}`);
-  const openTrackingUrl = `${baseUrl}/api/sends/t/open/${id}.gif`;
-  const clickTrackingBase = `${baseUrl}/api/sends/t/click/${id}?u=`;
-  const htmlFromText = textToHtmlWithLinks(bodyText, clickTrackingBase);
-  const bodyHtml = `${htmlFromText}<img src="${openTrackingUrl}" width="1" height="1" alt="" style="display:none" />`;
-
-  let sendResult;
-  try {
-    sendResult = await sendEmail({
-      to: lead.email,
-      subject,
-      text: bodyText,
-      html: bodyHtml,
-    });
-  } catch (e) {
-    const msg = e?.message || 'SMTP send failed';
-    return res.status(502).json({ success: false, message: msg });
+  const extra = req.body?.vars || {};
+  const out = await sendTrackedEmailToLead({ lead, template: tpl, extraVars: extra });
+  if (!out.ok) {
+    return res.status(502).json({ success: false, message: out.error || 'Send failed' });
   }
 
-  const status = sendResult.dryRun
-    ? 'dry-run'
-    : Array.isArray(sendResult.rejected) && sendResult.rejected.length > 0
-      ? 'failed'
-      : 'sent';
-
-  const sends = load(SENDS_FILE, []);
-  const record = {
-    id,
-    leadId,
-    templateId,
-    to: lead.email,
-    subject,
-    bodyText,
-    bodyHtml,
-    vars,
-    status,
-    openCount: 0,
-    firstOpenedAt: null,
-    lastOpenedAt: null,
-    clickCount: 0,
-    firstClickedAt: null,
-    lastClickedAt: null,
-    clickedUrls: [],
-    sendResult,
-    createdAt: new Date().toISOString(),
-  };
-  sends.unshift(record);
-  save(SENDS_FILE, sends);
-
-  res.status(201).json({ success: true, data: record });
+  res.status(201).json({ success: true, data: out.record });
 });
 
 // Bulk-send: provide { templateId, leadIds?: string[], emails?: string[] }
@@ -350,89 +234,16 @@ sendsRouter.post('/bulk', async (req, res) => {
     return true;
   });
 
-  const sends = load(SENDS_FILE, []);
-  const createdAt = new Date().toISOString();
-
   const results = [];
   for (const lead of uniqueTargets) {
-    const vars = { ...deriveVars(lead), ...(req.body?.vars || {}) };
-    const subject = renderTemplate(tpl.subject, vars);
-    const bodyText = renderTemplate(tpl.bodyText, vars);
-
-    const id = nanoid();
-    const baseUrl = String(process.env.TRACKING_BASE_URL || `http://localhost:${process.env.PORT || 5055}`);
-    const openTrackingUrl = `${baseUrl}/api/sends/t/open/${id}.gif`;
-    const clickTrackingBase = `${baseUrl}/api/sends/t/click/${id}?u=`;
-    const htmlFromText = textToHtmlWithLinks(bodyText, clickTrackingBase);
-    const bodyHtml = `${htmlFromText}<img src="${openTrackingUrl}" width="1" height="1" alt="" style="display:none" />`;
-
-    try {
-      const sendResult = await sendEmail({
-        to: lead.email,
-        subject,
-        text: bodyText,
-        html: bodyHtml,
-      });
-
-      const status = sendResult.dryRun
-        ? 'dry-run'
-        : Array.isArray(sendResult.rejected) && sendResult.rejected.length > 0
-          ? 'failed'
-          : 'sent';
-
-      const record = {
-        id,
-        leadId: lead.id,
-        templateId,
-        to: lead.email,
-        subject,
-        bodyText,
-        bodyHtml,
-        vars,
-        status,
-        openCount: 0,
-        firstOpenedAt: null,
-        lastOpenedAt: null,
-        clickCount: 0,
-        firstClickedAt: null,
-        lastClickedAt: null,
-        clickedUrls: [],
-        sendResult,
-        createdAt,
-      };
-      sends.unshift(record);
-      results.push({ ok: true, id, to: lead.email, status });
-    } catch (e) {
-      results.push({ ok: false, to: lead.email, error: e?.message || 'Send failed' });
+    const extraVars = req.body?.vars || {};
+    const out = await sendTrackedEmailToLead({ lead, template: tpl, extraVars });
+    if (out.ok && out.record) {
+      results.push({ ok: true, id: out.record.id, to: lead.email, status: out.record.status });
+    } else {
+      results.push({ ok: false, to: lead.email, error: out.error || 'Send failed' });
     }
   }
 
-  save(SENDS_FILE, sends);
   res.status(201).json({ success: true, data: { attempted: uniqueTargets.length, results } });
 });
-
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function textToHtmlWithLinks(text, clickTrackingBase) {
-  const safe = escapeHtml(text);
-  const withBreaks = safe.replaceAll('\n', '<br/>');
-
-  // very simple URL matcher for http(s)
-  const urlRe = /(https?:\/\/[^\s<]+)/g;
-  return (
-    '<div style="white-space:normal;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.45">' +
-    withBreaks.replace(urlRe, (rawUrl) => {
-      const href = `${clickTrackingBase}${encodeURIComponent(rawUrl)}`;
-      return `<a href="${href}" target="_blank" rel="noreferrer">${rawUrl}</a>`;
-    }) +
-    '</div>'
-  );
-}
-

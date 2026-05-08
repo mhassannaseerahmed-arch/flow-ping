@@ -13,8 +13,15 @@ function save(rows) {
 
 export const leadsRouter = express.Router();
 
+function ensureUnsubToken(lead) {
+  return lead?.unsubToken ? lead : { ...lead, unsubToken: nanoid() };
+}
+
 leadsRouter.get('/', (req, res) => {
-  res.json({ success: true, data: load() });
+  // Ensure older leads get an unsubscribe token without breaking existing IDs.
+  const rows = load().map(ensureUnsubToken);
+  save(rows);
+  res.json({ success: true, data: rows });
 });
 
 // Import/Upsert leads from pasted text (CSV lines).
@@ -69,11 +76,12 @@ leadsRouter.post('/import', (req, res) => {
         city: obj.city || '',
         email,
         notes: '',
+        unsubToken: nanoid(),
       });
       created += 1;
     } else {
       rows[idx] = {
-        ...rows[idx],
+        ...ensureUnsubToken(rows[idx]),
         clinicName: obj.clinicName || rows[idx].clinicName || '',
         website: obj.website || rows[idx].website || '',
         contactName: obj.contactName || rows[idx].contactName || '',
@@ -98,6 +106,7 @@ leadsRouter.post('/', (req, res) => {
     status: 'pending',
     createdAt: now,
     updatedAt: now,
+    unsubToken: nanoid(),
     ...req.body,
   };
   rows.unshift(lead);
@@ -110,6 +119,17 @@ leadsRouter.put('/:id', (req, res) => {
   const idx = rows.findIndex((r) => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Lead not found' });
   rows[idx] = { ...rows[idx], ...req.body, updatedAt: new Date().toISOString() };
+  save(rows);
+  res.json({ success: true, data: rows[idx] });
+});
+
+// Manual “reply stop” hook: mark a lead as replied so automation won’t chase them.
+leadsRouter.post('/:id/replied', (req, res) => {
+  const rows = load();
+  const idx = rows.findIndex((r) => r.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ success: false, message: 'Lead not found' });
+  const nowIso = new Date().toISOString();
+  rows[idx] = { ...rows[idx], status: 'replied', repliedAt: nowIso, updatedAt: nowIso };
   save(rows);
   res.json({ success: true, data: rows[idx] });
 });

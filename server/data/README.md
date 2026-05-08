@@ -8,5 +8,7 @@ JSON files here are created at runtime:
 | `templates.json` | Email templates (committed sample) |
 | `campaigns.json` | Campaigns |
 | `sends.json` | Send log + tracking (gitignored) |
+| `sendStats.json` | Rate-limit counters (gitignored) |
 
 Clone the repo, then add leads via the UI or API. `leads.json` / `sends.json` are listed in `.gitignore` so they are not pushed to GitHub.
+

@@ -221,7 +221,7 @@ export default function App() {
                 }}
               />
               <div>
-                <div style={{ fontWeight: 1000, letterSpacing: -0.6, fontSize: 16, color: '#0f172a' }}>FlowPing</div>
+                <div style={{ fontWeight: 1000, letterSpacing: -0.6, fontSize: 16, color: '#0f172a' }}>MailPilot</div>
                 <div style={{ fontSize: 12, color: '#64748b' }}>Outreach that’s easy to run</div>
               </div>
             </div>
@@ -364,7 +364,7 @@ export default function App() {
             <div style={{ fontSize: 12, color: '#64748b' }}>
               Tip: personalize with the <b>practice manager’s name</b> for higher reply rates.
             </div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>© {new Date().getFullYear()} FlowPing</div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>© {new Date().getFullYear()} MailPilot</div>
           </div>
         </div>
       </div>
@@ -375,7 +375,7 @@ export default function App() {
     <div style={{ fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial', padding: 24, maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0 }}>FlowPing</h1>
+          <h1 style={{ margin: 0 }}>MailPilot</h1>
           <button
             onClick={() => setView('landing')}
             style={{
