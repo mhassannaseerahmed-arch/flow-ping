@@ -1,10 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 
-const API_BASE = import.meta.env.VITE_EMAIL_HQ_API || (import.meta.env.DEV ? 'http://localhost:5055' : '');
+/** API origin (no trailing slash). Dev → local server; prod → same host unless VITE_EMAIL_HQ_API is set. */
+function getApiBase() {
+  const fromEnv = String(import.meta.env.VITE_EMAIL_HQ_API || '').replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  if (import.meta.env.DEV) return 'http://localhost:5055';
+  if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
+  return '';
+}
+
+const API_BASE = getApiBase();
 
 async function api(path, opts) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(opts?.headers || {}) },
     ...opts,
   });
@@ -13,7 +23,11 @@ async function api(path, opts) {
   try {
     json = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(text?.slice(0, 200) || `Bad response (${res.status})`);
+    const hint =
+      text?.trimStart().startsWith('<!') || text?.includes('<!DOCTYPE')
+        ? ' Got HTML instead of JSON — API URL is wrong or /api is not routed to the server. Set VITE_EMAIL_HQ_API to your backend URL, or deploy the monorepo so /api hits Express.'
+        : '';
+    throw new Error((text?.slice(0, 200) || `Bad response (${res.status})`) + hint);
   }
   if (!json.success) throw new Error(json.message || 'Request failed');
   return json.data;

@@ -32,6 +32,17 @@ npm run dev
 
 Then open the web app URL shown by Vite.
 
+### Vercel / production web
+
+If the UI shows **JSON errors** or **“Unexpected token `<`”**, the browser is loading **HTML** (usually `index.html`) instead of `/api/...` JSON.
+
+- **Monorepo deploy** (root `vercel.json` routes `/api` to the server): the app now defaults API calls to **`window.location.origin`**, so same-origin `/api` should work after redeploy.
+- **Frontend-only deploy** (static app on a different URL than the API): set at build time:
+
+  `VITE_EMAIL_HQ_API=https://your-api-host.example.com`
+
+  (no trailing slash)
+
 ### Server config
 
 Create `server/.env` (copy from `server/.env.example`):
