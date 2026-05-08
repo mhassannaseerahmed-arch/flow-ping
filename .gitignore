@@ -21,3 +21,4 @@ server/data/sendStats.json
 .idea/
 .vscode/
 
+.vercel

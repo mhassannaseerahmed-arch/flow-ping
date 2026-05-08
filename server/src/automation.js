@@ -2,6 +2,7 @@ import { readJson, writeJson } from './storage.js';
 import { sendEmail } from './mailer.js';
 import { sendTrackedEmailToLead } from './sendOps.js';
 import { publish } from './realtime.js';
+import { canSendNow, recordSend } from './rateLimit.js';
 
 const SENDS_FILE = 'sends.json';
 const LEADS_FILE = 'leads.json';
@@ -53,6 +54,10 @@ export async function runFollowupPass() {
 
     // Follow-up #1: after open
     if (!s.followup1SentAt) {
+      // Stop rule: if they clicked anything, don't chase with follow-ups.
+      if (Number(s.clickCount || 0) > 0) {
+        skipped1 += 1;
+      } else
       if (!s.lastOpenedAt || Number(s.openCount || 0) <= 0) {
         skipped1 += 1;
       } else {
@@ -65,6 +70,19 @@ export async function runFollowupPass() {
           if (!to) {
             skipped1 += 1;
           } else {
+            if (String(lead?.status || '').toLowerCase() === 'replied') {
+              skipped1 += 1;
+              continue;
+            }
+            if (String(lead?.status || '').toLowerCase() === 'unsubscribed') {
+              skipped1 += 1;
+              continue;
+            }
+            const gate = canSendNow({ toEmail: to });
+            if (!gate.ok) {
+              results.followup1.push({ ok: false, sendId: s.id, to, error: `Send blocked: ${gate.reason}` });
+              continue;
+            }
             try {
               const sendResult = await sendEmail({
                 to,
@@ -84,6 +102,8 @@ export async function runFollowupPass() {
               const nowIso = new Date().toISOString();
               sends[i] = { ...s, followup1SentAt: nowIso, followup1Status: status, updatedAt: nowIso };
               writeJson(SENDS_FILE, sends);
+
+              if (status === 'sent') recordSend({ toEmail: to });
 
               publish('followup_sent', {
                 type: 'followup_sent',
@@ -107,6 +127,11 @@ export async function runFollowupPass() {
 
     // Follow-up #2: after follow-up #1
     if (s.followup1SentAt && !s.followup2SentAt) {
+      // Stop rule: if they clicked anything, don't chase with follow-ups.
+      if (Number(s.clickCount || 0) > 0) {
+        skipped2 += 1;
+        continue;
+      }
       if (f2OnlyIfNoClick && Number(s.clickCount || 0) > 0) {
         skipped2 += 1;
         continue;
@@ -121,6 +146,20 @@ export async function runFollowupPass() {
       const to = lead?.email || s.to;
       if (!to) {
         skipped2 += 1;
+        continue;
+      }
+      if (String(lead?.status || '').toLowerCase() === 'replied') {
+        skipped2 += 1;
+        continue;
+      }
+      if (String(lead?.status || '').toLowerCase() === 'unsubscribed') {
+        skipped2 += 1;
+        continue;
+      }
+
+      const gate = canSendNow({ toEmail: to });
+      if (!gate.ok) {
+        results.followup2.push({ ok: false, sendId: s.id, to, error: `Send blocked: ${gate.reason}` });
         continue;
       }
 
@@ -143,6 +182,8 @@ export async function runFollowupPass() {
         const nowIso = new Date().toISOString();
         sends[i] = { ...s, followup2SentAt: nowIso, followup2Status: status, updatedAt: nowIso };
         writeJson(SENDS_FILE, sends);
+
+        if (status === 'sent') recordSend({ toEmail: to });
 
         publish('followup_sent', {
           type: 'followup_sent',

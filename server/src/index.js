@@ -31,24 +31,29 @@ app.use('/api/automation', automationRouter);
 app.use('/u', unsubscribeRouter);
 
 const PORT = Number(process.env.PORT || 5055);
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`MailPilot server listening on http://localhost:${PORT}`);
 
-  const interval = Number(process.env.AUTOMATION_INTERVAL_MS || 0);
-  if (interval > 0) {
-    const maxSends = Number(process.env.AUTOMATION_MAX_SENDS_PER_TICK || 20);
-    const delayMs = Number(process.env.AUTOMATION_DELAY_MS || 15000);
+// Standalone listener (only when not on Vercel)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
     // eslint-disable-next-line no-console
-    console.log(
-      `Automation worker: every ${interval}ms (max ${maxSends} campaign sends/tick, ${delayMs}ms between sends)`
-    );
-    setInterval(() => {
-      runAutomationTick({ maxSends, delayMs, doFollowups: true, doCampaigns: true }).catch((e) => {
-        // eslint-disable-next-line no-console
-        console.error('[automation]', e?.message || e);
-      });
-    }, interval);
-  }
-});
+    console.log(`MailPilot server listening on http://localhost:${PORT}`);
 
+    const interval = Number(process.env.AUTOMATION_INTERVAL_MS || 0);
+    if (interval > 0) {
+      const maxSends = Number(process.env.AUTOMATION_MAX_SENDS_PER_TICK || 20);
+      const delayMs = Number(process.env.AUTOMATION_DELAY_MS || 15000);
+      // eslint-disable-next-line no-console
+      console.log(
+        `Automation worker: every ${interval}ms (max ${maxSends} campaign sends/tick, ${delayMs}ms between sends)`
+      );
+      setInterval(() => {
+        runAutomationTick({ maxSends, delayMs, doFollowups: true, doCampaigns: true }).catch((e) => {
+          // eslint-disable-next-line no-console
+          console.error('[automation]', e?.message || e);
+        });
+      }, interval);
+    }
+  });
+}
+
+export default app;

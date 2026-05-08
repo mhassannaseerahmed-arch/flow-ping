@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, Route, Routes } from 'react-router-dom';
 
-const API_BASE = import.meta.env.VITE_EMAIL_HQ_API || 'http://localhost:5055';
+const API_BASE = import.meta.env.VITE_EMAIL_HQ_API || (import.meta.env.DEV ? 'http://localhost:5055' : '');
 
 async function api(path, opts) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -13,7 +14,6 @@ async function api(path, opts) {
 }
 
 export default function App() {
-  const [view, setView] = useState('landing'); // 'landing' | 'dashboard'
   const [leads, setLeads] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [sends, setSends] = useState([]);
@@ -28,6 +28,8 @@ export default function App() {
   const [preview, setPreview] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [automationRunning, setAutomationRunning] = useState(false);
+  const [lastAutomation, setLastAutomation] = useState(null);
 
   const selectedLead = useMemo(
     () => leads.find((l) => l.id === selectedLeadId) || null,
@@ -177,6 +179,35 @@ export default function App() {
     }
   };
 
+  const runAutomationNow = async () => {
+    setAutomationRunning(true);
+    setError('');
+    try {
+      const out = await api('/api/automation/run', { method: 'POST', body: JSON.stringify({}) });
+      setLastAutomation(out);
+      await loadTracking(search);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAutomationRunning(false);
+    }
+  };
+
+  const updateLead = async (leadId, patch) => {
+    if (!leadId) return;
+    setError('');
+    try {
+      await api(`/api/leads/${leadId}`, {
+        method: 'PUT',
+        body: JSON.stringify(patch || {}),
+      });
+      const next = await api('/api/leads');
+      setLeads(next);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const runSearch = async (nextSearch) => {
     try {
       setError('');
@@ -198,8 +229,7 @@ export default function App() {
     return sends.filter((s) => Number(s.openCount || 0) > 0);
   }, [sends, onlyOpened]);
 
-  if (view === 'landing') {
-    return (
+  const LandingPage = () => (
       <div
         style={{
           fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
@@ -244,8 +274,8 @@ export default function App() {
               >
                 API status
               </a>
-              <button
-                onClick={() => setView('dashboard')}
+              <Link
+                to="/dashboard"
                 style={{
                   padding: '10px 12px',
                   borderRadius: 12,
@@ -256,10 +286,12 @@ export default function App() {
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                   boxShadow: '0 12px 30px rgba(15,23,42,.20)',
+                  display: 'inline-block',
+                  textDecoration: 'none',
                 }}
               >
                 Open Dashboard
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -293,8 +325,8 @@ export default function App() {
               </div>
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18, alignItems: 'center' }}>
-                <button
-                  onClick={() => setView('dashboard')}
+                <Link
+                  to="/dashboard"
                   style={{
                     padding: '12px 14px',
                     borderRadius: 14,
@@ -303,10 +335,12 @@ export default function App() {
                     color: 'white',
                     fontWeight: 950,
                     cursor: 'pointer',
+                    display: 'inline-block',
+                    textDecoration: 'none',
                   }}
                 >
                   Start sending
-                </button>
+                </Link>
                 <div style={{ fontSize: 12, color: '#64748b' }}>
                   Opens are approximate (privacy). <b>Clicks + replies</b> are strongest.
                 </div>
@@ -369,15 +403,14 @@ export default function App() {
         </div>
       </div>
     );
-  }
 
-  return (
+  const DashboardPage = () => (
     <div style={{ fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial', padding: 24, maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
           <h1 style={{ margin: 0 }}>MailPilot</h1>
-          <button
-            onClick={() => setView('landing')}
+          <Link
+            to="/"
             style={{
               padding: '6px 10px',
               borderRadius: 999,
@@ -387,10 +420,12 @@ export default function App() {
               fontWeight: 800,
               cursor: 'pointer',
               fontSize: 12,
+              textDecoration: 'none',
+              display: 'inline-block',
             }}
           >
             Landing
-          </button>
+          </Link>
         </div>
         <div style={{ color: '#64748b', fontSize: 12 }}>
           API: <code>{API_BASE}</code>
@@ -408,6 +443,38 @@ export default function App() {
             <div style={{ fontSize: 28, color: '#0f172a', fontWeight: 800, marginTop: 4 }}>{card.value}</div>
           </div>
         ))}
+      </div>
+
+      <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 16, background: '#fff', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 900, color: '#0f172a' }}>Automation</div>
+            <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+              Runs campaign sends + follow-ups with stop rules (click/replied/unsubscribed) + rate limits.
+            </div>
+            {lastAutomation?.at ? (
+              <div style={{ marginTop: 8, fontSize: 12, color: '#475569' }}>
+                <b>Last run:</b> {new Date(lastAutomation.at).toLocaleString()}
+              </div>
+            ) : null}
+          </div>
+          <button
+            onClick={runAutomationNow}
+            disabled={automationRunning}
+            style={{
+              padding: '10px 12px',
+              borderRadius: 12,
+              border: '1px solid #0f172a',
+              background: automationRunning ? '#334155' : '#0f172a',
+              color: 'white',
+              fontWeight: 900,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {automationRunning ? 'Running…' : 'Run automation now'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -476,6 +543,36 @@ export default function App() {
                 <div><b>Contact:</b> {selectedLead?.contactName || '—'} ({selectedLead?.role || '—'})</div>
                 <div><b>Email:</b> {selectedLead?.email || <span style={{ color: '#b45309' }}>missing</span>}</div>
                 <div><b>Website:</b> {selectedLead?.website || '—'}</div>
+                <div><b>Status:</b> {selectedLead?.status || 'pending'}</div>
+                {selectedLead?.unsubToken ? (
+                  <div style={{ marginTop: 6 }}>
+                    <b>Unsub link:</b>{' '}
+                    <a href={`${API_BASE}/u/${encodeURIComponent(selectedLead.unsubToken)}`} target="_blank" rel="noreferrer">
+                      open
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                <button
+                  onClick={() => updateLead(selectedLeadId, { status: 'pending' })}
+                  style={{ padding: '8px 10px', borderRadius: 12, border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontWeight: 800, fontSize: 12 }}
+                >
+                  Set pending
+                </button>
+                <button
+                  onClick={() => updateLead(selectedLeadId, { status: 'replied' })}
+                  style={{ padding: '8px 10px', borderRadius: 12, border: '1px solid #0f172a', background: '#0f172a', color: 'white', cursor: 'pointer', fontWeight: 900, fontSize: 12 }}
+                >
+                  Mark replied
+                </button>
+                <button
+                  onClick={() => updateLead(selectedLeadId, { status: 'unsubscribed' })}
+                  style={{ padding: '8px 10px', borderRadius: 12, border: '1px solid #fecdd3', background: '#fff1f2', color: '#9f1239', cursor: 'pointer', fontWeight: 900, fontSize: 12 }}
+                >
+                  Unsubscribe
+                </button>
               </div>
             </div>
 
@@ -639,5 +736,12 @@ export default function App() {
       </div>
     </div>
   );
-}
 
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

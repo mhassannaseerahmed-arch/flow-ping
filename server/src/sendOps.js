@@ -47,14 +47,25 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
   const subject = renderTemplate(template.subject, vars);
   const bodyText = renderTemplate(template.bodyText, vars);
 
+  // Ensure every outgoing email contains a working unsubscribe link.
+  let unsubToken = String(lead.unsubToken || '').trim();
+  if (!unsubToken) {
+    unsubToken = nanoid();
+    const leads = readJson(LEADS_FILE, []);
+    const idx = leads.findIndex((l) => l.id === leadId);
+    if (idx !== -1) {
+      leads[idx] = { ...leads[idx], unsubToken, updatedAt: new Date().toISOString() };
+      writeJson(LEADS_FILE, leads);
+    }
+  }
+
   const id = nanoid();
   const baseUrl = String(process.env.TRACKING_BASE_URL || `http://localhost:${process.env.PORT || 5055}`);
   const openTrackingUrl = `${baseUrl}/api/sends/t/open/${id}.gif`;
   const clickTrackingBase = `${baseUrl}/api/sends/t/click/${id}?u=`;
   const htmlFromText = textToHtmlWithLinks(bodyText, clickTrackingBase);
   const unsubBase = String(process.env.UNSUBSCRIBE_BASE_URL || baseUrl);
-  const unsubToken = String(lead.unsubToken || '').trim();
-  const unsubUrl = unsubToken ? `${unsubBase}/u/${encodeURIComponent(unsubToken)}` : null;
+  const unsubUrl = `${unsubBase}/u/${encodeURIComponent(unsubToken)}`;
 
   const footerHtml = unsubUrl
     ? `<div style="margin-top:18px;font-size:12px;color:#64748b">If you prefer not to receive these emails, <a href="${unsubUrl}" target="_blank" rel="noreferrer">unsubscribe</a>.</div>`
@@ -115,16 +126,6 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
   const sends = readJson(SENDS_FILE, []);
   sends.unshift(record);
   writeJson(SENDS_FILE, sends);
-
-  // Backfill unsubToken for older leads when we actually send.
-  if (!lead.unsubToken) {
-    const leads = readJson(LEADS_FILE, []);
-    const idx = leads.findIndex((l) => l.id === leadId);
-    if (idx !== -1) {
-      leads[idx] = { ...leads[idx], unsubToken: nanoid(), updatedAt: new Date().toISOString() };
-      writeJson(LEADS_FILE, leads);
-    }
-  }
 
   return { ok: true, record };
 }
