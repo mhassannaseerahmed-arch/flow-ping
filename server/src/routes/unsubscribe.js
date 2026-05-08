@@ -8,15 +8,15 @@ function loadLeads() {
 }
 
 function saveLeads(rows) {
-  writeJson(LEADS_FILE, rows);
+  return writeJson(LEADS_FILE, rows);
 }
 
 export const unsubscribeRouter = express.Router();
 
 // Simple unsubscribe landing page (safe for email clients / browsers)
-unsubscribeRouter.get('/:token', (req, res) => {
+unsubscribeRouter.get('/:token', async (req, res) => {
   const token = String(req.params.token || '').trim();
-  const leads = loadLeads();
+  const leads = await loadLeads();
   const idx = leads.findIndex((l) => String(l.unsubToken || '').trim() === token);
 
   if (idx === -1) {
@@ -26,7 +26,7 @@ unsubscribeRouter.get('/:token', (req, res) => {
 
   const nowIso = new Date().toISOString();
   leads[idx] = { ...leads[idx], status: 'unsubscribed', unsubscribedAt: nowIso, updatedAt: nowIso };
-  saveLeads(leads);
+  await saveLeads(leads);
 
   res
     .status(200)

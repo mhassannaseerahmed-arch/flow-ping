@@ -13,6 +13,9 @@ build/
 # Local outreach data (may contain PII)
 server/data/leads.json
 server/data/sends.json
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
 server/data/sendStats.json
 
 # OS / editor

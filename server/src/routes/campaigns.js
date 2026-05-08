@@ -8,17 +8,17 @@ function load() {
   return readJson(FILE, []);
 }
 function save(rows) {
-  writeJson(FILE, rows);
+  return writeJson(FILE, rows);
 }
 
 export const campaignsRouter = express.Router();
 
-campaignsRouter.get('/', (req, res) => {
-  res.json({ success: true, data: load() });
+campaignsRouter.get('/', async (req, res) => {
+  res.json({ success: true, data: await load() });
 });
 
-campaignsRouter.post('/', (req, res) => {
-  const rows = load();
+campaignsRouter.post('/', async (req, res) => {
+  const rows = await load();
   const now = new Date().toISOString();
   const campaign = {
     id: nanoid(),
@@ -30,23 +30,23 @@ campaignsRouter.post('/', (req, res) => {
     updatedAt: now,
   };
   rows.unshift(campaign);
-  save(rows);
+  await save(rows);
   res.status(201).json({ success: true, data: campaign });
 });
 
-campaignsRouter.put('/:id', (req, res) => {
-  const rows = load();
+campaignsRouter.put('/:id', async (req, res) => {
+  const rows = await load();
   const idx = rows.findIndex((r) => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Campaign not found' });
   rows[idx] = { ...rows[idx], ...req.body, updatedAt: new Date().toISOString() };
-  save(rows);
+  await save(rows);
   res.json({ success: true, data: rows[idx] });
 });
 
-campaignsRouter.delete('/:id', (req, res) => {
-  const rows = load();
+campaignsRouter.delete('/:id', async (req, res) => {
+  const rows = await load();
   const next = rows.filter((r) => r.id !== req.params.id);
-  save(next);
+  await save(next);
   res.json({ success: true });
 });
 

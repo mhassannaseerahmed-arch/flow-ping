@@ -39,8 +39,8 @@ export async function runFollowupPass() {
   );
   const f2OnlyIfNoClick = String(process.env.FOLLOWUP2_ONLY_IF_NO_CLICK || 'true').trim().toLowerCase() !== 'false';
 
-  const sends = readJson(SENDS_FILE, []);
-  const leads = readJson(LEADS_FILE, []);
+  const sends = await readJson(SENDS_FILE, []);
+  const leads = await readJson(LEADS_FILE, []);
 
   const results = { followup1: [], followup2: [] };
   let sent1 = 0;
@@ -101,7 +101,7 @@ export async function runFollowupPass() {
 
               const nowIso = new Date().toISOString();
               sends[i] = { ...s, followup1SentAt: nowIso, followup1Status: status, updatedAt: nowIso };
-              writeJson(SENDS_FILE, sends);
+              await writeJson(SENDS_FILE, sends);
 
               if (status === 'sent') recordSend({ toEmail: to });
 
@@ -181,7 +181,7 @@ export async function runFollowupPass() {
 
         const nowIso = new Date().toISOString();
         sends[i] = { ...s, followup2SentAt: nowIso, followup2Status: status, updatedAt: nowIso };
-        writeJson(SENDS_FILE, sends);
+        await writeJson(SENDS_FILE, sends);
 
         if (status === 'sent') recordSend({ toEmail: to });
 
@@ -228,10 +228,10 @@ function alreadySentToEmail(sends, toEmail, templateId) {
  * already has a send row for the same template.
  */
 export async function runCampaignAutomation({ maxSends = 50, delayMs = 0 }) {
-  const campaigns = readJson(CAMPAIGNS_FILE, []).filter((c) => c.automationEnabled && c.templateId);
-  const leads = readJson(LEADS_FILE, []);
-  const templates = readJson(TPL_FILE, []);
-  let sends = readJson(SENDS_FILE, []);
+  const campaigns = (await readJson(CAMPAIGNS_FILE, [])).filter((c) => c.automationEnabled && c.templateId);
+  const leads = await readJson(LEADS_FILE, []);
+  const templates = await readJson(TPL_FILE, []);
+  let sends = await readJson(SENDS_FILE, []);
 
   const tplById = new Map(templates.map((t) => [t.id, t]));
   const results = [];

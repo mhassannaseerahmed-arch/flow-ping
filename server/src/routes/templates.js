@@ -8,17 +8,17 @@ function load() {
   return readJson(FILE, []);
 }
 function save(rows) {
-  writeJson(FILE, rows);
+  return writeJson(FILE, rows);
 }
 
 export const templatesRouter = express.Router();
 
-templatesRouter.get('/', (req, res) => {
-  res.json({ success: true, data: load() });
+templatesRouter.get('/', async (req, res) => {
+  res.json({ success: true, data: await load() });
 });
 
-templatesRouter.post('/', (req, res) => {
-  const rows = load();
+templatesRouter.post('/', async (req, res) => {
+  const rows = await load();
   const now = new Date().toISOString();
   const tpl = {
     id: nanoid(),
@@ -29,23 +29,23 @@ templatesRouter.post('/', (req, res) => {
     updatedAt: now,
   };
   rows.unshift(tpl);
-  save(rows);
+  await save(rows);
   res.status(201).json({ success: true, data: tpl });
 });
 
-templatesRouter.put('/:id', (req, res) => {
-  const rows = load();
+templatesRouter.put('/:id', async (req, res) => {
+  const rows = await load();
   const idx = rows.findIndex((r) => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Template not found' });
   rows[idx] = { ...rows[idx], ...req.body, updatedAt: new Date().toISOString() };
-  save(rows);
+  await save(rows);
   res.json({ success: true, data: rows[idx] });
 });
 
-templatesRouter.delete('/:id', (req, res) => {
-  const rows = load();
+templatesRouter.delete('/:id', async (req, res) => {
+  const rows = await load();
   const next = rows.filter((r) => r.id !== req.params.id);
-  save(next);
+  await save(next);
   res.json({ success: true });
 });
 

@@ -51,11 +51,11 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
   let unsubToken = String(lead.unsubToken || '').trim();
   if (!unsubToken) {
     unsubToken = nanoid();
-    const leads = readJson(LEADS_FILE, []);
+    const leads = await readJson(LEADS_FILE, []);
     const idx = leads.findIndex((l) => l.id === leadId);
     if (idx !== -1) {
       leads[idx] = { ...leads[idx], unsubToken, updatedAt: new Date().toISOString() };
-      writeJson(LEADS_FILE, leads);
+      await writeJson(LEADS_FILE, leads);
     }
   }
 
@@ -123,9 +123,9 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
     createdAt: new Date().toISOString(),
   };
 
-  const sends = readJson(SENDS_FILE, []);
+  const sends = await readJson(SENDS_FILE, []);
   sends.unshift(record);
-  writeJson(SENDS_FILE, sends);
+  await writeJson(SENDS_FILE, sends);
 
   return { ok: true, record };
 }

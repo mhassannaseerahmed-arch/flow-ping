@@ -8,7 +8,7 @@ function load() {
   return readJson(FILE, []);
 }
 function save(rows) {
-  writeJson(FILE, rows);
+  return writeJson(FILE, rows);
 }
 
 export const leadsRouter = express.Router();
@@ -17,18 +17,18 @@ function ensureUnsubToken(lead) {
   return lead?.unsubToken ? lead : { ...lead, unsubToken: nanoid() };
 }
 
-leadsRouter.get('/', (req, res) => {
+leadsRouter.get('/', async (req, res) => {
   // Ensure older leads get an unsubscribe token without breaking existing IDs.
-  const rows = load().map(ensureUnsubToken);
-  save(rows);
+  const rows = (await load()).map(ensureUnsubToken);
+  await save(rows);
   res.json({ success: true, data: rows });
 });
 
 // Import/Upsert leads from pasted text (CSV lines).
 // Format (CSV): clinicName,website,contactName,role,city,email
 // You can also paste just: email
-leadsRouter.post('/import', (req, res) => {
-  const rows = load();
+leadsRouter.post('/import', async (req, res) => {
+  const rows = await load();
   const now = new Date().toISOString();
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ success: false, message: 'Missing text' });
@@ -94,12 +94,12 @@ leadsRouter.post('/import', (req, res) => {
     }
   }
 
-  save(rows);
+  await save(rows);
   res.status(201).json({ success: true, data: { created, updated, skipped, total: lines.length } });
 });
 
-leadsRouter.post('/', (req, res) => {
-  const rows = load();
+leadsRouter.post('/', async (req, res) => {
+  const rows = await load();
   const now = new Date().toISOString();
   const lead = {
     id: nanoid(),
@@ -110,34 +110,34 @@ leadsRouter.post('/', (req, res) => {
     ...req.body,
   };
   rows.unshift(lead);
-  save(rows);
+  await save(rows);
   res.status(201).json({ success: true, data: lead });
 });
 
-leadsRouter.put('/:id', (req, res) => {
-  const rows = load();
+leadsRouter.put('/:id', async (req, res) => {
+  const rows = await load();
   const idx = rows.findIndex((r) => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Lead not found' });
   rows[idx] = { ...rows[idx], ...req.body, updatedAt: new Date().toISOString() };
-  save(rows);
+  await save(rows);
   res.json({ success: true, data: rows[idx] });
 });
 
 // Manual “reply stop” hook: mark a lead as replied so automation won’t chase them.
-leadsRouter.post('/:id/replied', (req, res) => {
-  const rows = load();
+leadsRouter.post('/:id/replied', async (req, res) => {
+  const rows = await load();
   const idx = rows.findIndex((r) => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Lead not found' });
   const nowIso = new Date().toISOString();
   rows[idx] = { ...rows[idx], status: 'replied', repliedAt: nowIso, updatedAt: nowIso };
-  save(rows);
+  await save(rows);
   res.json({ success: true, data: rows[idx] });
 });
 
-leadsRouter.delete('/:id', (req, res) => {
-  const rows = load();
+leadsRouter.delete('/:id', async (req, res) => {
+  const rows = await load();
   const next = rows.filter((r) => r.id !== req.params.id);
-  save(next);
+  await save(next);
   res.json({ success: true });
 });
 
