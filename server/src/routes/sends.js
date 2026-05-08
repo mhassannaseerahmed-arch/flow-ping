@@ -9,25 +9,15 @@ const SENDS_FILE = 'sends.json';
 const LEADS_FILE = 'leads.json';
 const TPL_FILE = 'templates.json';
 
-function load(filename, fallback) {
+async function load(filename, fallback) {
   return readJson(filename, fallback);
 }
-function save(filename, rows) {
-  writeJson(filename, rows);
+async function save(filename, rows) {
+  await writeJson(filename, rows);
 }
 
 export const sendsRouter = express.Router();
 
-// Follow-up worker: send follow-up #1 after open, then follow-up #2 after follow-up #1.
-// NOTE: "not replied" is not detected yet (reply tracking is Phase 2).
-// Configure:
-// - FOLLOWUP_AFTER_OPEN_HOURS (default 24)
-// - FOLLOWUP_SUBJECT (optional)
-// - FOLLOWUP_BODY_TEXT (optional)
-// - FOLLOWUP2_AFTER_FOLLOWUP1_HOURS (default 48)
-// - FOLLOWUP2_SUBJECT (optional)
-// - FOLLOWUP2_BODY_TEXT (optional)
-// - FOLLOWUP2_ONLY_IF_NO_CLICK (default true)
 sendsRouter.post('/followups/run', async (req, res) => {
   try {
     const data = await runFollowupPass();
@@ -37,9 +27,9 @@ sendsRouter.post('/followups/run', async (req, res) => {
   }
 });
 
-sendsRouter.get('/t/open/:id.gif', (req, res) => {
+sendsRouter.get('/t/open/:id.gif', async (req, res) => {
   const id = String(req.params.id || '');
-  const sends = load(SENDS_FILE, []);
+  const sends = await load(SENDS_FILE, []);
   const idx = sends.findIndex((s) => s.id === id);
   if (idx !== -1) {
     const nowIso = new Date().toISOString();
@@ -52,7 +42,7 @@ sendsRouter.get('/t/open/:id.gif', (req, res) => {
       updatedAt: nowIso,
     };
     sends[idx] = next;
-    save(SENDS_FILE, sends);
+    await save(SENDS_FILE, sends);
 
     publish('email_opened', {
       type: 'email_opened',
@@ -66,7 +56,6 @@ sendsRouter.get('/t/open/:id.gif', (req, res) => {
     });
   }
 
-  // 1x1 transparent GIF
   const gif = Buffer.from(
     'R0lGODlhAQABAPAAAAAAAAAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==',
     'base64'
@@ -78,10 +67,10 @@ sendsRouter.get('/t/open/:id.gif', (req, res) => {
   res.status(200).end(gif);
 });
 
-sendsRouter.get('/t/click/:id', (req, res) => {
+sendsRouter.get('/t/click/:id', async (req, res) => {
   const id = String(req.params.id || '');
   const url = String(req.query.u || '');
-  const sends = load(SENDS_FILE, []);
+  const sends = await load(SENDS_FILE, []);
   const idx = sends.findIndex((s) => s.id === id);
 
   if (idx !== -1 && url) {
@@ -99,7 +88,7 @@ sendsRouter.get('/t/click/:id', (req, res) => {
     next.clickedUrls.unshift({ url, at: nowIso });
 
     sends[idx] = next;
-    save(SENDS_FILE, sends);
+    await save(SENDS_FILE, sends);
 
     publish('email_clicked', {
       type: 'email_clicked',
@@ -114,7 +103,6 @@ sendsRouter.get('/t/click/:id', (req, res) => {
     });
   }
 
-  // Basic redirect (avoid open redirect to javascript:)
   if (!url || /^javascript:/i.test(url)) {
     res.status(400).send('Bad link');
     return;
@@ -122,8 +110,8 @@ sendsRouter.get('/t/click/:id', (req, res) => {
   res.redirect(302, url);
 });
 
-sendsRouter.get('/summary', (req, res) => {
-  const sends = load(SENDS_FILE, []);
+sendsRouter.get('/summary', async (req, res) => {
+  const sends = await load(SENDS_FILE, []);
 
   const summary = sends.reduce(
     (acc, send) => {
@@ -138,10 +126,10 @@ sendsRouter.get('/summary', (req, res) => {
   res.json({ success: true, data: summary });
 });
 
-sendsRouter.get('/', (req, res) => {
-  const sends = load(SENDS_FILE, []);
-  const leads = load(LEADS_FILE, []);
-  const templates = load(TPL_FILE, []);
+sendsRouter.get('/', async (req, res) => {
+  const sends = await load(SENDS_FILE, []);
+  const leads = await load(LEADS_FILE, []);
+  const templates = await load(TPL_FILE, []);
   const q = String(req.query.q || '').trim().toLowerCase();
 
   const enriched = sends.map((send) => ({
@@ -168,11 +156,12 @@ sendsRouter.get('/', (req, res) => {
   res.json({ success: true, data: filtered });
 });
 
-// Preview a render for one lead + template (no sending)
-sendsRouter.post('/preview', (req, res) => {
+sendsRouter.post('/preview', async (req, res) => {
   const { leadId, templateId } = req.body || {};
-  const lead = load(LEADS_FILE, []).find((l) => l.id === leadId);
-  const tpl = load(TPL_FILE, []).find((t) => t.id === templateId);
+  const leads = await load(LEADS_FILE, []);
+  const tpls = await load(TPL_FILE, []);
+  const lead = leads.find((l) => l.id === leadId);
+  const tpl = tpls.find((t) => t.id === templateId);
   if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
   if (!tpl) return res.status(404).json({ success: false, message: 'Template not found' });
 
@@ -183,12 +172,12 @@ sendsRouter.post('/preview', (req, res) => {
   res.json({ success: true, data: { subject, bodyText, vars } });
 });
 
-// Send one email and record it (uses DRY_RUN by default)
 sendsRouter.post('/', async (req, res) => {
   const { leadId, templateId } = req.body || {};
-  const leads = load(LEADS_FILE, []);
+  const leads = await load(LEADS_FILE, []);
+  const tpls = await load(TPL_FILE, []);
   const lead = leads.find((l) => l.id === leadId);
-  const tpl = load(TPL_FILE, []).find((t) => t.id === templateId);
+  const tpl = tpls.find((t) => t.id === templateId);
   if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
   if (!tpl) return res.status(404).json({ success: false, message: 'Template not found' });
   if (!lead.email) return res.status(400).json({ success: false, message: 'Lead has no email' });
@@ -202,13 +191,13 @@ sendsRouter.post('/', async (req, res) => {
   res.status(201).json({ success: true, data: out.record });
 });
 
-// Bulk-send: provide { templateId, leadIds?: string[], emails?: string[] }
 sendsRouter.post('/bulk', async (req, res) => {
   const templateId = String(req.body?.templateId || '');
-  const tpl = load(TPL_FILE, []).find((t) => t.id === templateId);
+  const tpls = await load(TPL_FILE, []);
+  const tpl = tpls.find((t) => t.id === templateId);
   if (!tpl) return res.status(404).json({ success: false, message: 'Template not found' });
 
-  const leads = load(LEADS_FILE, []);
+  const leads = await load(LEADS_FILE, []);
   const byId = new Map(leads.map((l) => [l.id, l]));
   const leadIds = Array.isArray(req.body?.leadIds) ? req.body.leadIds : [];
   const emails = Array.isArray(req.body?.emails) ? req.body.emails : [];
@@ -225,7 +214,6 @@ sendsRouter.post('/bulk', async (req, res) => {
     if (lead) targets.push(lead);
   }
 
-  // de-dupe by email
   const seen = new Set();
   const uniqueTargets = targets.filter((t) => {
     const key = String(t.email || '').toLowerCase();

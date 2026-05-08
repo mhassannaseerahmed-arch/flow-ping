@@ -17,22 +17,21 @@ function domainOf(email) {
   return at === -1 ? '' : e.slice(at + 1);
 }
 
-function load() {
+async function load() {
   return readJson(FILE, { days: {} });
 }
 
-function save(stats) {
-  writeJson(FILE, stats);
+async function save(stats) {
+  await writeJson(FILE, stats);
 }
 
-export function canSendNow({ toEmail }) {
-  // Schedule window (local server time)
+export async function canSendNow({ toEmail }) {
   const start = String(process.env.SEND_WINDOW_START || '09:00');
   const end = String(process.env.SEND_WINDOW_END || '17:00');
   const weekdaysOnly = String(process.env.SEND_WEEKDAYS_ONLY || 'true').trim().toLowerCase() !== 'false';
 
   const now = new Date();
-  const day = now.getDay(); // 0 Sun .. 6 Sat
+  const day = now.getDay();
   if (weekdaysOnly && (day === 0 || day === 6)) {
     return { ok: false, reason: 'outside_weekdays' };
   }
@@ -44,12 +43,11 @@ export function canSendNow({ toEmail }) {
     return { ok: false, reason: 'outside_send_window' };
   }
 
-  // Rate limits
   const maxDaily = Number(process.env.MAX_SENDS_PER_DAY || 40);
   const maxPerDomain = Number(process.env.MAX_SENDS_PER_DOMAIN_PER_DAY || 5);
   const domain = domainOf(toEmail);
   const key = todayKey();
-  const stats = load();
+  const stats = await load();
   const dayStats = stats.days[key] || { total: 0, byDomain: {} };
 
   if (dayStats.total >= maxDaily) return { ok: false, reason: 'daily_cap' };
@@ -58,10 +56,10 @@ export function canSendNow({ toEmail }) {
   return { ok: true };
 }
 
-export function recordSend({ toEmail }) {
+export async function recordSend({ toEmail }) {
   const key = todayKey();
   const domain = domainOf(toEmail);
-  const stats = load();
+  const stats = await load();
   const dayStats = stats.days[key] || { total: 0, byDomain: {} };
 
   dayStats.total += 1;
@@ -69,8 +67,7 @@ export function recordSend({ toEmail }) {
     dayStats.byDomain[domain] = (dayStats.byDomain[domain] || 0) + 1;
   }
   stats.days[key] = dayStats;
-  save(stats);
+  await save(stats);
 
   return dayStats;
 }
-

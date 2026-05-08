@@ -78,7 +78,7 @@ export async function runFollowupPass() {
               skipped1 += 1;
               continue;
             }
-            const gate = canSendNow({ toEmail: to });
+            const gate = await canSendNow({ toEmail: to });
             if (!gate.ok) {
               results.followup1.push({ ok: false, sendId: s.id, to, error: `Send blocked: ${gate.reason}` });
               continue;
@@ -103,7 +103,7 @@ export async function runFollowupPass() {
               sends[i] = { ...s, followup1SentAt: nowIso, followup1Status: status, updatedAt: nowIso };
               await writeJson(SENDS_FILE, sends);
 
-              if (status === 'sent') recordSend({ toEmail: to });
+              if (status === 'sent') await recordSend({ toEmail: to });
 
               publish('followup_sent', {
                 type: 'followup_sent',
@@ -157,7 +157,7 @@ export async function runFollowupPass() {
         continue;
       }
 
-      const gate = canSendNow({ toEmail: to });
+      const gate = await canSendNow({ toEmail: to });
       if (!gate.ok) {
         results.followup2.push({ ok: false, sendId: s.id, to, error: `Send blocked: ${gate.reason}` });
         continue;
@@ -183,7 +183,7 @@ export async function runFollowupPass() {
         sends[i] = { ...s, followup2SentAt: nowIso, followup2Status: status, updatedAt: nowIso };
         await writeJson(SENDS_FILE, sends);
 
-        if (status === 'sent') recordSend({ toEmail: to });
+        if (status === 'sent') await recordSend({ toEmail: to });
 
         publish('followup_sent', {
           type: 'followup_sent',

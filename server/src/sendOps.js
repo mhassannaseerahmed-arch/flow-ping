@@ -38,7 +38,7 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
   if (!template?.id) return { ok: false, error: 'Invalid template' };
   if (String(lead.status || '').toLowerCase() === 'unsubscribed') return { ok: false, error: 'Lead unsubscribed' };
 
-  const gate = canSendNow({ toEmail: lead.email });
+  const gate = await canSendNow({ toEmail: lead.email });
   if (!gate.ok) return { ok: false, error: `Send blocked: ${gate.reason}` };
 
   const leadId = lead.id;
@@ -99,7 +99,7 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
       : 'sent';
 
   if (status === 'sent') {
-    recordSend({ toEmail: lead.email });
+    await recordSend({ toEmail: lead.email });
   }
 
   const record = {
