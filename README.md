@@ -1,4 +1,4 @@
-## MailPilot (separate project)
+# FlowPing (MailPilot)
 
 A standalone outreach + email-ops app to manage:
 
