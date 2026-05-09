@@ -1,24 +1,26 @@
 # Contributing to FlowPing
 
-First off, thank you for considering contributing to FlowPing! It's people like you that make FlowPing such a great tool.
+Thank you for your interest in contributing to FlowPing! 🚀
 
-## Code of Conduct
-Please be respectful and professional in all interactions.
+## How to Contribute
 
-## How Can I Contribute?
-- **Reporting Bugs:** Open an issue with a clear description and steps to reproduce.
-- - **Suggesting Enhancements:** Open an issue to discuss your ideas.
-  - - **Pull Requests:**
-    -   1. Fork the repo.
-        2.   2. Create a new branch.
-             3.   3. Make your changes.
-                  4.   4. Submit a PR.
-                    
-                       5. ## Style Guidelines
-                       6. - Use clean, readable code.
-                          - - Follow the existing project structure.
-                            - - Ensure all tests (if any) pass.
-                             
-                              - ## Contact
-                              - If you have any questions, feel free to reach out to **Hassan Naseer Ahmed**.
-                              - 
+1. **Fork** this repository.
+2. **Clone** your fork locally: `git clone https://github.com/mhassannaseerahmed-arch/flow-ping.git`
+3. **Create** a new branch: `git checkout -b feature/your-feature-name`
+4. **Make** your changes and commit them: `git commit -m 'feat: add your feature'`
+5. **Push** to your branch: `git push origin feature/your-feature-name`
+6. **Open a Pull Request** on GitHub.
+
+## Code Standards
+
+- Use clear, descriptive variable names.
+- Keep components small and focused.
+- Follow existing code style and patterns.
+
+## Reporting Bugs
+
+Please open a GitHub Issue with a clear description of the bug, steps to reproduce, and expected vs actual behavior.
+
+---
+
+Built with ❤️ by [Hassan Naseer Ahmed](https://github.com/mhassannaseerahmed-arch)
