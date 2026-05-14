@@ -1,0 +1,13 @@
+---
+description: Keep FlowPing in sync with GitHub after code changes
+globs: "**/*"
+---
+
+# FlowPing → GitHub
+
+When you change anything in this **flowping** repository (not only `web/` or `server/`), finish by **committing and pushing** to `origin` on the current branch (usually `main`), unless the user explicitly says not to push.
+
+- Stage only intentional source and config (e.g. `web/src`, `server/src`, `vercel.json`, `README.md`).
+- Do **not** commit secrets: `.env`, `.env.*`, `.env.vercel`, API keys, or large personal assets unless the user asks.
+
+If `git push` fails (auth/network), tell the user exactly what failed and what is left uncommitted.
