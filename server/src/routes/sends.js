@@ -127,6 +127,7 @@ sendsRouter.get('/summary', async (req, res) => {
 });
 
 sendsRouter.get('/', async (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
   const sendsFromJson = await load(SENDS_FILE, []);
   
   // Also fetch from MongoDB for a complete, persistent history
@@ -173,7 +174,7 @@ sendsRouter.get('/', async (req, res) => {
       )
     : enriched;
 
-  res.json({ success: true, data: enriched });
+  res.json({ success: true, data: filtered });
 });
 
 sendsRouter.post('/preview', async (req, res) => {

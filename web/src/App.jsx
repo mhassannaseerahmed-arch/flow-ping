@@ -43,8 +43,6 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [notif, setNotif] = useState(null);
   const [onlyOpened, setOnlyOpened] = useState(false);
-  const [pasteText, setPasteText] = useState('');
-  const [bulkSending, setBulkSending] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [preview, setPreview] = useState(null);
@@ -160,44 +158,6 @@ export default function App() {
       setError(e.message);
     } finally {
       setSending(false);
-    }
-  };
-
-  const doBulkSend = async () => {
-    if (!selectedTemplateId) return;
-    const text = pasteText.trim();
-    if (!text) return;
-    setBulkSending(true);
-    setError('');
-    try {
-      await api('/api/leads/import', {
-        method: 'POST',
-        body: JSON.stringify({ text }),
-      });
-      const out = await api('/api/sends/bulk', {
-        method: 'POST',
-        body: JSON.stringify({
-          templateId: selectedTemplateId,
-          emails: text
-            .split(/\r?\n/)
-            .map((l) => l.trim())
-            .filter(Boolean)
-            .map((line) => {
-              const parts = line.split(',').map((p) => p.trim());
-              return parts.length === 1 ? parts[0] : parts[5] || '';
-            })
-            .filter(Boolean),
-        }),
-      });
-
-      const ok = out.results?.filter((r) => r.ok).length || 0;
-      const fail = out.results?.filter((r) => !r.ok).length || 0;
-      await Promise.all([api('/api/leads').then(setLeads), loadTracking(search)]);
-      alert(`Bulk send done. Success: ${ok}, Failed: ${fail} (attempted ${out.attempted || ok + fail})`);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBulkSending(false);
     }
   };
 
@@ -343,7 +303,7 @@ export default function App() {
               </div>
 
               <div style={{ marginTop: 12, fontSize: 16, color: '#334155', maxWidth: 760, lineHeight: 1.55 }}>
-                A lightweight email ops tool: import/paste leads, use templates, send in bulk, and see what’s working with real-time notifications.
+                A lightweight email ops tool: manage leads, use templates, send from the dashboard, and see what’s working with real-time notifications.
               </div>
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18, alignItems: 'center' }}>
@@ -370,7 +330,7 @@ export default function App() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 18 }}>
                 {[
-                  { k: '10s', v: 'Paste leads → send' },
+                  { k: '10s', v: 'Pick lead → send' },
                   { k: 'Live', v: 'Open/click notifications' },
                   { k: 'Log', v: 'Search send history' },
                 ].map((s) => (
@@ -397,7 +357,7 @@ export default function App() {
                 {[
                   { title: 'Lead management', body: 'Clinic, contact name, role, notes.' },
                   { title: 'Templates + preview', body: 'Variables + fast review before sending.' },
-                  { title: 'Bulk send', body: 'Paste leads and fire emails in one click.' },
+                  { title: 'Send', body: 'Choose a lead + template, preview, then send or dry-run.' },
                   { title: 'Tracking', body: 'Opens (where supported), clicks, and send history.' },
                 ].map((c) => (
                   <div key={c.title} style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 12, background: '#ffffff' }}>
@@ -637,47 +597,6 @@ export default function App() {
             Variables: <code>{selectedTemplate ? '{{FirstName}} {{ClinicName}}' : ''}</code>
           </div>
         </div>
-      </div>
-
-      <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 16, marginTop: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'baseline' }}>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a' }}>Paste leads → fire emails</div>
-            <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-              Paste one lead per line. Format: <code>clinicName,website,contactName,role,city,email</code> (or just <code>email</code>).
-            </div>
-          </div>
-          <button
-            onClick={doBulkSend}
-            disabled={bulkSending || !selectedTemplateId || !pasteText.trim()}
-            style={{
-              padding: '10px 12px',
-              borderRadius: 12,
-              border: '1px solid #0f172a',
-              background: bulkSending ? '#334155' : '#0f172a',
-              color: 'white',
-              fontWeight: 900,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {bulkSending ? 'Sending…' : 'Send to pasted leads'}
-          </button>
-        </div>
-        <textarea
-          value={pasteText}
-          onChange={(e) => setPasteText(e.target.value)}
-          placeholder={`jill@example.com\nHarley Street Smile Clinic,harleystreetsmileclinic.co.uk,Jill Wright,Business Manager,London,jill@example.com`}
-          style={{
-            width: '100%',
-            minHeight: 140,
-            marginTop: 12,
-            padding: 12,
-            borderRadius: 12,
-            border: '1px solid #e2e8f0',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-          }}
-        />
       </div>
 
       <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 16, marginTop: 16 }}>
