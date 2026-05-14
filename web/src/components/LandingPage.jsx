@@ -48,23 +48,6 @@ export default function LandingPage({ API_BASE }) {
               API status
             </a>
             <Link
-              to="/apply"
-              style={{
-                padding: '10px 12px',
-                borderRadius: 12,
-                border: '1px solid #6366f1',
-                background: 'rgba(238,242,255,.95)',
-                color: '#3730a3',
-                fontWeight: 900,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                display: 'inline-block',
-                textDecoration: 'none',
-              }}
-            >
-              ApplyKit
-            </Link>
-            <Link
               to="/dashboard"
               style={{
                 padding: '10px 12px',
@@ -115,22 +98,6 @@ export default function LandingPage({ API_BASE }) {
             </div>
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18, alignItems: 'center' }}>
-              <Link
-                to="/apply"
-                style={{
-                  padding: '12px 14px',
-                  borderRadius: 14,
-                  border: '1px solid #6366f1',
-                  background: '#eef2ff',
-                  color: '#3730a3',
-                  fontWeight: 950,
-                  cursor: 'pointer',
-                  display: 'inline-block',
-                  textDecoration: 'none',
-                }}
-              >
-                Resume + jobs
-              </Link>
               <Link
                 to="/dashboard"
                 style={{

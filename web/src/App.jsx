@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { t } from './theme.js';
-import CsJobTrackerPage from './pages/CsJobTrackerPage.jsx';
 
 /** API origin (no trailing slash). Dev → same origin + Vite proxy to :5055 unless VITE_EMAIL_HQ_API is set. */
 function getApiBase() {
@@ -293,9 +292,6 @@ export default function App() {
             <a href={`${API_BASE}/health`} target="_blank" rel="noreferrer" style={{ ...btnGhost, fontSize: 13 }}>
               API status
             </a>
-            <Link to="/apply" style={{ ...btnGhost, fontSize: 13 }}>
-              ApplyKit
-            </Link>
             <Link to="/dashboard" style={{ ...btnPrimary, textDecoration: 'none', display: 'inline-block', fontSize: 14 }}>
               Open dashboard
             </Link>
@@ -355,9 +351,6 @@ export default function App() {
             </p>
 
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 22, alignItems: 'center' }}>
-              <Link to="/apply" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block', fontSize: 14, fontWeight: 800 }}>
-                ApplyKit (jobs + resume)
-              </Link>
               <Link to="/dashboard" style={{ ...btnPrimary, textDecoration: 'none', display: 'inline-block', fontSize: 15, padding: '14px 22px' }}>
                 Start sending
               </Link>
@@ -829,7 +822,6 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/apply" element={<CsJobTrackerPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
