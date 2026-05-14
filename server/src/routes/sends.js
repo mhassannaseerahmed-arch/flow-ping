@@ -4,9 +4,9 @@ import { renderTemplate, deriveVars } from '../templateEngine.js';
 import { publish } from '../realtime.js';
 import { sendTrackedEmailToLead } from '../sendOps.js';
 import { runFollowupPass } from '../automation.js';
+import { Lead } from '../models/Lead.js';
 
 const SENDS_FILE = 'sends.json';
-const LEADS_FILE = 'leads.json';
 const TPL_FILE = 'templates.json';
 
 async function load(filename, fallback) {
@@ -127,15 +127,35 @@ sendsRouter.get('/summary', async (req, res) => {
 });
 
 sendsRouter.get('/', async (req, res) => {
-  const sends = await load(SENDS_FILE, []);
-  const leads = await load(LEADS_FILE, []);
-  const templates = await load(TPL_FILE, []);
-  const q = String(req.query.q || '').trim().toLowerCase();
+  const sendsFromJson = await load(SENDS_FILE, []);
+  
+  // Also fetch from MongoDB for a complete, persistent history
+  let sendsFromDb = [];
+  try {
+    const { Send } = await import('../models/Outreach.js');
+    sendsFromDb = await Send.find().sort({ createdAt: -1 }).lean();
+  } catch (dbErr) {
+    console.error('Failed to fetch Sends from MongoDB:', dbErr.message);
+  }
 
-  const enriched = sends.map((send) => ({
-    ...send,
-    lead: leads.find((lead) => lead.id === send.leadId) || null,
-    template: templates.find((template) => template.id === send.templateId) || null,
+  // Merge them, prioritizing DB records if IDs conflict
+  const allSends = [...sendsFromDb];
+  const seenIds = new Set(sendsFromDb.map(s => s.id));
+  for (const s of sendsFromJson) {
+    if (!seenIds.has(s.id)) {
+      allSends.push(s);
+    }
+  }
+
+  const templates = await load(TPL_FILE, []);
+  
+  const enriched = await Promise.all(allSends.map(async (send) => {
+    const lead = await Lead.findOne({ id: send.leadId });
+    return {
+      ...send,
+      lead: lead || null,
+      template: templates.find((template) => template.id === send.templateId) || null,
+    };
   }));
 
   const filtered = q
@@ -153,14 +173,13 @@ sendsRouter.get('/', async (req, res) => {
       )
     : enriched;
 
-  res.json({ success: true, data: filtered });
+  res.json({ success: true, data: enriched });
 });
 
 sendsRouter.post('/preview', async (req, res) => {
   const { leadId, templateId } = req.body || {};
-  const leads = await load(LEADS_FILE, []);
   const tpls = await load(TPL_FILE, []);
-  const lead = leads.find((l) => l.id === leadId);
+  const lead = await Lead.findOne({ id: leadId });
   const tpl = tpls.find((t) => t.id === templateId);
   if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
   if (!tpl) return res.status(404).json({ success: false, message: 'Template not found' });
@@ -174,9 +193,8 @@ sendsRouter.post('/preview', async (req, res) => {
 
 sendsRouter.post('/', async (req, res) => {
   const { leadId, templateId } = req.body || {};
-  const leads = await load(LEADS_FILE, []);
   const tpls = await load(TPL_FILE, []);
-  const lead = leads.find((l) => l.id === leadId);
+  const lead = await Lead.findOne({ id: leadId });
   const tpl = tpls.find((t) => t.id === templateId);
   if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
   if (!tpl) return res.status(404).json({ success: false, message: 'Template not found' });
@@ -197,20 +215,18 @@ sendsRouter.post('/bulk', async (req, res) => {
   const tpl = tpls.find((t) => t.id === templateId);
   if (!tpl) return res.status(404).json({ success: false, message: 'Template not found' });
 
-  const leads = await load(LEADS_FILE, []);
-  const byId = new Map(leads.map((l) => [l.id, l]));
   const leadIds = Array.isArray(req.body?.leadIds) ? req.body.leadIds : [];
   const emails = Array.isArray(req.body?.emails) ? req.body.emails : [];
 
   const targets = [];
   for (const id of leadIds) {
-    const lead = byId.get(id);
+    const lead = await Lead.findOne({ id: id });
     if (lead?.email) targets.push(lead);
   }
   for (const email of emails) {
     const e = String(email || '').trim();
     if (!e || !e.includes('@')) continue;
-    const lead = leads.find((l) => String(l.email || '').toLowerCase() === e.toLowerCase());
+    const lead = await Lead.findOne({ email: new RegExp(`^${e}$`, 'i') });
     if (lead) targets.push(lead);
   }
 

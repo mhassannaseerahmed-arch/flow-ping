@@ -1,2 +1,11 @@
-[]
-
+[
+  {
+    "id": "london_founding_partners",
+    "name": "London Clinic Founding Partner Outreach",
+    "templateId": "founding_partner_outreach",
+    "automationEnabled": true,
+    "leadIds": [],
+    "createdAt": "2026-05-09T15:01:25.000Z",
+    "updatedAt": "2026-05-09T15:01:25.000Z"
+  }
+]

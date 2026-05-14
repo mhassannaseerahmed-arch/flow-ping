@@ -3,8 +3,9 @@ const clients = new Set();
 export function sseHandler(req, res) {
   res.status(200);
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders?.();
 
   res.write(`event: hello\ndata: ${JSON.stringify({ ok: true })}\n\n`);
@@ -13,7 +14,7 @@ export function sseHandler(req, res) {
 
   const keepAlive = setInterval(() => {
     res.write(`event: ping\ndata: ${Date.now()}\n\n`);
-  }, 15000);
+  }, 10000);
 
   req.on('close', () => {
     clearInterval(keepAlive);
@@ -31,4 +32,3 @@ export function publish(eventName, payload) {
     }
   }
 }
-

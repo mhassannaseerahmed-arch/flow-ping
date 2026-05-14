@@ -1,4 +1,8 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
+  "rewrites": [
+    {
+      "source": "/((?!api/)(?!u/)(?!assets/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
-

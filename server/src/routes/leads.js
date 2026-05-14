@@ -1,35 +1,21 @@
 import express from 'express';
 import { nanoid } from 'nanoid';
-import { readJson, writeJson } from '../storage.js';
-
-const FILE = 'leads.json';
-
-function load() {
-  return readJson(FILE, []);
-}
-function save(rows) {
-  return writeJson(FILE, rows);
-}
+import { Lead } from '../models/Lead.js';
 
 export const leadsRouter = express.Router();
 
-function ensureUnsubToken(lead) {
-  return lead?.unsubToken ? lead : { ...lead, unsubToken: nanoid() };
-}
-
+// GET all leads
 leadsRouter.get('/', async (req, res) => {
-  // Ensure older leads get an unsubscribe token without breaking existing IDs.
-  const rows = (await load()).map(ensureUnsubToken);
-  await save(rows);
-  res.json({ success: true, data: rows });
+  try {
+    const leads = await Lead.find().sort({ createdAt: -1 });
+    res.json({ success: true, data: leads });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 // Import/Upsert leads from pasted text (CSV lines).
-// Format (CSV): clinicName,website,contactName,role,city,email
-// You can also paste just: email
 leadsRouter.post('/import', async (req, res) => {
-  const rows = await load();
-  const now = new Date().toISOString();
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ success: false, message: 'Missing text' });
 
@@ -62,82 +48,76 @@ leadsRouter.post('/import', async (req, res) => {
       continue;
     }
 
-    const idx = rows.findIndex((r) => String(r.email || '').toLowerCase() === email.toLowerCase());
-    if (idx === -1) {
-      rows.unshift({
-        id: nanoid(),
-        status: 'pending',
-        createdAt: now,
-        updatedAt: now,
-        clinicName: obj.clinicName || '',
-        website: obj.website || '',
-        contactName: obj.contactName || '',
-        role: obj.role || '',
-        city: obj.city || '',
-        email,
-        notes: '',
-        unsubToken: nanoid(),
-      });
-      created += 1;
-    } else {
-      rows[idx] = {
-        ...ensureUnsubToken(rows[idx]),
-        clinicName: obj.clinicName || rows[idx].clinicName || '',
-        website: obj.website || rows[idx].website || '',
-        contactName: obj.contactName || rows[idx].contactName || '',
-        role: obj.role || rows[idx].role || '',
-        city: obj.city || rows[idx].city || '',
-        email,
-        updatedAt: now,
-      };
-      updated += 1;
+    try {
+      const existing = await Lead.findOne({ email: new RegExp(`^${email}$`, 'i') });
+      if (!existing) {
+        await Lead.create({
+          ...obj,
+          email,
+          unsubToken: nanoid(),
+          status: 'pending'
+        });
+        created += 1;
+      } else {
+        Object.assign(existing, obj);
+        await existing.save();
+        updated += 1;
+      }
+    } catch (err) {
+      console.error('Error importing lead:', err);
+      skipped += 1;
     }
   }
 
-  await save(rows);
   res.status(201).json({ success: true, data: { created, updated, skipped, total: lines.length } });
 });
 
+// Create single lead
 leadsRouter.post('/', async (req, res) => {
-  const rows = await load();
-  const now = new Date().toISOString();
-  const lead = {
-    id: nanoid(),
-    status: 'pending',
-    createdAt: now,
-    updatedAt: now,
-    unsubToken: nanoid(),
-    ...req.body,
-  };
-  rows.unshift(lead);
-  await save(rows);
-  res.status(201).json({ success: true, data: lead });
+  try {
+    const lead = await Lead.create({
+      ...req.body,
+      unsubToken: nanoid(),
+      status: 'pending'
+    });
+    res.status(201).json({ success: true, data: lead });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
+// Update lead
 leadsRouter.put('/:id', async (req, res) => {
-  const rows = await load();
-  const idx = rows.findIndex((r) => r.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ success: false, message: 'Lead not found' });
-  rows[idx] = { ...rows[idx], ...req.body, updatedAt: new Date().toISOString() };
-  await save(rows);
-  res.json({ success: true, data: rows[idx] });
+  try {
+    const lead = await Lead.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+    res.json({ success: true, data: lead });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
-// Manual “reply stop” hook: mark a lead as replied so automation won’t chase them.
+// Manual “reply stop” hook
 leadsRouter.post('/:id/replied', async (req, res) => {
-  const rows = await load();
-  const idx = rows.findIndex((r) => r.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ success: false, message: 'Lead not found' });
-  const nowIso = new Date().toISOString();
-  rows[idx] = { ...rows[idx], status: 'replied', repliedAt: nowIso, updatedAt: nowIso };
-  await save(rows);
-  res.json({ success: true, data: rows[idx] });
+  try {
+    const lead = await Lead.findOneAndUpdate({ id: req.params.id }, { 
+      status: 'replied', 
+      repliedAt: new Date() 
+    }, { new: true });
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+    res.json({ success: true, data: lead });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
+// Delete lead
 leadsRouter.delete('/:id', async (req, res) => {
-  const rows = await load();
-  const next = rows.filter((r) => r.id !== req.params.id);
-  await save(next);
-  res.json({ success: true });
+  try {
+    await Lead.findOneAndDelete({ id: req.params.id });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 

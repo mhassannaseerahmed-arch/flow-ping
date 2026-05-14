@@ -132,18 +132,18 @@ export async function readJson(filename, fallback) {
     }
   }
 
-  // 2. If it's a new deployment on Vercel, try to seed from the bundled data folder.
-  if (process.env.VERCEL) {
-    const seedPath = path.join(bundledDataDir, filename);
-    if (fs.existsSync(seedPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
-        // Save it to /tmp so it's "writable" from now on.
+  // 2. Try to seed from the bundled data folder.
+  const seedPath = path.join(bundledDataDir, filename);
+  if (fs.existsSync(seedPath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+      // Save it to dataDir so it's "writable" from now on.
+      if (!process.env.VERCEL) {
         fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8');
-        return data;
-      } catch (e) {
-        // fall through
       }
+      return data;
+    } catch (e) {
+      // fall through
     }
   }
 

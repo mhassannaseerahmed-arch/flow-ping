@@ -4,6 +4,9 @@ import { runAutomationTick, runFollowupPass, runCampaignAutomation } from '../au
 export const automationRouter = express.Router();
 
 function authorize(req) {
+  // Allow Vercel Cron jobs automatically
+  if (req.headers['x-vercel-cron'] === '1') return true;
+
   const secret = process.env.AUTOMATION_SECRET;
   if (!secret) return true;
   const auth = String(req.headers.authorization || '');
@@ -18,7 +21,7 @@ function authorize(req) {
  *
  * If AUTOMATION_SECRET is set in env, require Authorization: Bearer <secret> or body.secret.
  */
-automationRouter.post('/run', async (req, res) => {
+automationRouter.all('/run', async (req, res) => {
   if (!authorize(req)) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }

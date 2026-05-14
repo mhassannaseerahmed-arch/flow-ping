@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 
-/** API origin (no trailing slash). Dev → local server; prod → same host unless VITE_EMAIL_HQ_API is set. */
+/** API origin (no trailing slash). Dev → same origin + Vite proxy to :5055 unless VITE_EMAIL_HQ_API is set. */
 function getApiBase() {
   const fromEnv = String(import.meta.env.VITE_EMAIL_HQ_API || '').replace(/\/$/, '');
   if (fromEnv) return fromEnv;
-  if (import.meta.env.DEV) return 'http://localhost:5055';
+  if (import.meta.env.DEV) return '';
   if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
   return '';
 }
@@ -23,11 +23,13 @@ async function api(path, opts) {
   try {
     json = text ? JSON.parse(text) : {};
   } catch {
-    const hint =
-      text?.trimStart().startsWith('<!') || text?.includes('<!DOCTYPE')
-        ? ' Got HTML instead of JSON — API URL is wrong or /api is not routed to the server. Set VITE_EMAIL_HQ_API to your backend URL, or deploy the monorepo so /api hits Express.'
-        : '';
-    throw new Error((text?.slice(0, 200) || `Bad response (${res.status})`) + hint);
+    const isHtml = text?.trimStart().startsWith('<!') || text?.includes('<!DOCTYPE');
+    const hint = isHtml
+      ? import.meta.env.DEV
+        ? ' Response was HTML, not JSON. Start the API (cd server && npm run dev, default port 5055) so Vite can proxy /api to it. Or set VITE_EMAIL_HQ_API to a running backend URL.'
+        : ' Response was HTML, not JSON. If you deployed only the web folder, set VITE_EMAIL_HQ_API to your API origin, or deploy from the FlowPing repo root so vercel.json can route /api to the server. On Vercel, check function logs (e.g. missing MONGODB_URI).'
+      : '';
+    throw new Error((text?.slice(0, 200) || `Bad response (${res.status})`) + (hint ? ` — ${hint}` : ''));
   }
   if (!json.success) throw new Error(json.message || 'Request failed');
   return json.data;
@@ -252,7 +254,7 @@ export default function App() {
   const LandingPage = () => (
       <div
         style={{
-          fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+          fontFamily  : 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
           minHeight: '100vh',
           background:
             'radial-gradient(800px 500px at 18% 12%, rgba(56,189,248,.25), transparent 60%), radial-gradient(700px 450px at 80% 18%, rgba(99,102,241,.20), transparent 55%), linear-gradient(180deg, #ffffff 0%, #f8fafc 55%, #ffffff 100%)',

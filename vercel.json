@@ -20,5 +20,11 @@
     { "src": "/(.*)", "dest": "web/$1", "continue": true },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "web/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/automation/run",
+      "schedule": "00 07 * * *"
+    }
   ]
 }

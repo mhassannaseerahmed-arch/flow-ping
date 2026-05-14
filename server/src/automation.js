@@ -1,13 +1,12 @@
-import { readJson, writeJson } from './storage.js';
 import { sendEmail } from './mailer.js';
 import { sendTrackedEmailToLead } from './sendOps.js';
 import { publish } from './realtime.js';
 import { canSendNow, recordSend } from './rateLimit.js';
+import { Lead } from './models/Lead.js';
+import { Template, Campaign } from './models/Outreach.js';
+import { readJson, writeJson } from './storage.js';
 
 const SENDS_FILE = 'sends.json';
-const LEADS_FILE = 'leads.json';
-const TPL_FILE = 'templates.json';
-const CAMPAIGNS_FILE = 'campaigns.json';
 
 function escapeHtml(str) {
   return String(str)
@@ -40,7 +39,6 @@ export async function runFollowupPass() {
   const f2OnlyIfNoClick = String(process.env.FOLLOWUP2_ONLY_IF_NO_CLICK || 'true').trim().toLowerCase() !== 'false';
 
   const sends = await readJson(SENDS_FILE, []);
-  const leads = await readJson(LEADS_FILE, []);
 
   const results = { followup1: [], followup2: [] };
   let sent1 = 0;
@@ -54,7 +52,6 @@ export async function runFollowupPass() {
 
     // Follow-up #1: after open
     if (!s.followup1SentAt) {
-      // Stop rule: if they clicked anything, don't chase with follow-ups.
       if (Number(s.clickCount || 0) > 0) {
         skipped1 += 1;
       } else
@@ -65,7 +62,7 @@ export async function runFollowupPass() {
         if (!openedAtMs || openedAtMs > f1CutoffMs) {
           skipped1 += 1;
         } else {
-          const lead = leads.find((l) => l.id === s.leadId);
+          const lead = await Lead.findOne({ id: s.leadId });
           const to = lead?.email || s.to;
           if (!to) {
             skipped1 += 1;
@@ -127,7 +124,6 @@ export async function runFollowupPass() {
 
     // Follow-up #2: after follow-up #1
     if (s.followup1SentAt && !s.followup2SentAt) {
-      // Stop rule: if they clicked anything, don't chase with follow-ups.
       if (Number(s.clickCount || 0) > 0) {
         skipped2 += 1;
         continue;
@@ -142,7 +138,7 @@ export async function runFollowupPass() {
         continue;
       }
 
-      const lead = leads.find((l) => l.id === s.leadId);
+      const lead = await Lead.findOne({ id: s.leadId });
       const to = lead?.email || s.to;
       if (!to) {
         skipped2 += 1;
@@ -222,47 +218,41 @@ function alreadySentToEmail(sends, toEmail, templateId) {
   return sends.some((s) => normalizeEmail(s.to) === to && s.templateId === templateId);
 }
 
-/**
- * For each campaign with automationEnabled + templateId, send to listed leadIds
- * (or all leads with status pending if leadIds is empty). Skips if that lead
- * already has a send row for the same template.
- */
-export async function runCampaignAutomation({ maxSends = 50, delayMs = 0 }) {
-  const campaigns = (await readJson(CAMPAIGNS_FILE, [])).filter((c) => c.automationEnabled && c.templateId);
-  const leads = await readJson(LEADS_FILE, []);
-  const templates = await readJson(TPL_FILE, []);
+export async function runCampaignAutomation({ maxSends = 50, delayMs = 500 }) {
+  const campaigns = await Campaign.find({ automationEnabled: true, templateId: { $ne: null } });
   let sends = await readJson(SENDS_FILE, []);
 
-  const tplById = new Map(templates.map((t) => [t.id, t]));
   const results = [];
   let sent = 0;
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   for (const camp of campaigns) {
-    const tpl = tplById.get(camp.templateId);
+    const tpl = await Template.findOne({ id: camp.templateId });
     if (!tpl) {
       results.push({ ok: false, campaignId: camp.id, error: 'Template not found' });
       continue;
     }
 
-    let leadIds = Array.isArray(camp.leadIds) ? [...camp.leadIds] : [];
-    if (leadIds.length === 0) {
-      leadIds = leads.filter((l) => (l.status || 'pending') === 'pending' && l.email).map((l) => l.id);
+    let leads = [];
+    if (Array.isArray(camp.leadIds) && camp.leadIds.length > 0) {
+      leads = await Lead.find({ id: { $in: camp.leadIds } });
+    } else {
+      // Fetch all leads with an email, ignoring status, to send to everyone
+      leads = await Lead.find({ email: { $exists: true } });
     }
 
-    for (const lid of leadIds) {
+    for (const lead of leads) {
       if (sent >= maxSends) break;
-      const lead = leads.find((l) => l.id === lid);
       if (!lead?.email) continue;
       if (String(lead.status || '').toLowerCase() === 'replied') continue;
       if (String(lead.status || '').toLowerCase() === 'unsubscribed') continue;
-      // De-dupe by leadId and email (in case lead ids were regenerated/imported)
+      
       if (alreadySent(sends, lead.id, camp.templateId)) continue;
       if (alreadySentToEmail(sends, lead.email, camp.templateId)) continue;
 
       const r = await sendTrackedEmailToLead({ lead, template: tpl });
-      results.push({ ok: r.ok, campaignId: camp.id, leadId: lid, to: lead.email, error: r.error, status: r.record?.status });
+      results.push({ ok: r.ok, campaignId: camp.id, leadId: lead.id, to: lead.email, error: r.error, status: r.record?.status });
       if (r.ok && r.record) {
         sent += 1;
         sends = [r.record, ...sends];
@@ -276,7 +266,7 @@ export async function runCampaignAutomation({ maxSends = 50, delayMs = 0 }) {
 
 export async function runAutomationTick({
   maxSends = 50,
-  delayMs = 0,
+  delayMs = 500,
   doFollowups = true,
   doCampaigns = true,
 } = {}) {

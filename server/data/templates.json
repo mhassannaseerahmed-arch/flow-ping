@@ -1,11 +1,19 @@
+
 [
   {
+    "id": "founding_partner_outreach",
+    "name": "Founding Partner Outreach (Simplified)",
+    "subject": "Quick question about {{clinicName}}",
+    "bodyText": "Hi {{clinicName}},\n\nI'm building a simple tool for London clinics that automatically fills empty slots from no-shows and late cancellations.\n\nIf you share two numbers (avg daily appointments + rough no-show %), I’ll send you a 1-page \"Revenue Leak\" report for {{clinicName}} showing how much you're losing.\n\nI'm currently looking for 5 'Founding Partner' clinics to test the system for free in exchange for professional feedback.\n\nWorth a quick chat?\n\nBest,\nHassan",
+    "createdAt": "2026-05-13T18:59:00.000Z",
+    "updatedAt": "2026-05-13T18:59:00.000Z"
+  },
+  {
     "id": "demo_intro",
-    "name": "Demo intro template",
-    "subject": "Quick idea for {{ClinicName}}",
-    "bodyText": "Hi {{FirstName}},\n\nQuick note — I had an idea to help {{ClinicName}} reduce no‑shows and fill last‑minute gaps.\n\nIf you reply with (1) avg daily appointments and (2) rough no‑show %, I’ll send a 1‑page estimate.\n\nBest,\nYour name",
+    "name": "Quick Interest Check (Simplified)",
+    "subject": "Quick question about {{clinicName}}",
+    "bodyText": "Hi {{clinicName}},\n\nI'm building a simple tool for London clinics that automatically fills empty slots from no-shows and late cancellations.\n\nIf you share two numbers (avg daily appointments + rough no-show %), I’ll send you a 1-page \"Revenue Leak\" report for {{clinicName}} showing how much you're losing.\n\nI'm currently looking for 5 'Founding Partner' clinics to test the system for free in exchange for professional feedback.\n\nWorth a quick chat?\n\nBest,\nHassan",
     "createdAt": "2026-01-01T00:00:00.000Z",
-    "updatedAt": "2026-01-01T00:00:00.000Z"
+    "updatedAt": "2026-05-13T18:59:00.000Z"
   }
 ]
-

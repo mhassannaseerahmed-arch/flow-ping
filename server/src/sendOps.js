@@ -3,9 +3,9 @@ import { readJson, writeJson } from './storage.js';
 import { renderTemplate, deriveVars } from './templateEngine.js';
 import { sendEmail } from './mailer.js';
 import { canSendNow, recordSend } from './rateLimit.js';
+import { Lead } from './models/Lead.js';
 
 const SENDS_FILE = 'sends.json';
-const LEADS_FILE = 'leads.json';
 
 function escapeHtml(str) {
   return String(str)
@@ -31,7 +31,7 @@ export function textToHtmlWithLinks(text, clickTrackingBase) {
 }
 
 /**
- / Record one tracked send (open pixel + wrapped links) for a lead + template.
+ * Record one tracked send (open pixel + wrapped links) for a lead + template.
  */
 export async function sendTrackedEmailToLead({ lead, template, extraVars = {} }) {
   if (!lead?.email) return { ok: false, error: 'Lead has no email' };
@@ -51,20 +51,22 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
   let unsubToken = String(lead.unsubToken || '').trim();
   if (!unsubToken) {
     unsubToken = nanoid();
-    const leads = await readJson(LEADS_FILE, []);
-    const idx = leads.findIndex((l) => l.id === leadId);
-    if (idx !== -1) {
-      leads[idx] = { ...leads[idx], unsubToken, updatedAt: new Date().toISOString() };
-      await writeJson(LEADS_FILE, leads);
-    }
+    await Lead.findOneAndUpdate({ id: leadId }, { unsubToken });
   }
 
   const id = nanoid();
-  const baseUrl = String(process.env.TRACKING_BASE_URL || `http://localhost:${process.env.PORT || 5055}`);
+  
+  const getBaseUrl = () => {
+    if (process.env.TRACKING_BASE_URL) return process.env.TRACKING_BASE_URL.replace(/\/$/, '');
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+    return `http://localhost:${process.env.PORT || 5055}`;
+  };
+
+  const baseUrl = getBaseUrl();
   const openTrackingUrl = `${baseUrl}/api/sends/t/open/${id}.gif`;
   const clickTrackingBase = `${baseUrl}/api/sends/t/click/${id}?u=`;
   const htmlFromText = textToHtmlWithLinks(bodyText, clickTrackingBase);
-  const unsubBase = String(process.env.UNSUBSCRIBE_BASE_URL || baseUrl);
+  const unsubBase = (process.env.UNSUBSCRIBE_BASE_URL || baseUrl).replace(/\/$/, '');
   const unsubUrl = `${unsubBase}/u/${encodeURIComponent(unsubToken)}`;
 
   const footerHtml = unsubUrl
@@ -100,6 +102,8 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
 
   if (status === 'sent') {
     await recordSend({ toEmail: lead.email });
+    // Mark the lead as 'sent' in the DB so it's not re-sent by automation unless reset to 'pending'
+    await Lead.findOneAndUpdate({ id: leadId }, { status: 'sent' });
   }
 
   const record = {
@@ -122,6 +126,14 @@ export async function sendTrackedEmailToLead({ lead, template, extraVars = {} })
     sendResult,
     createdAt: new Date().toISOString(),
   };
+
+  // Persist to MongoDB for long-term tracking and dashboard visibility
+  try {
+    const { Send } = await import('./models/Outreach.js');
+    await Send.create(record);
+  } catch (dbErr) {
+    console.error('Failed to save Send record to MongoDB:', dbErr.message);
+  }
 
   const sends = await readJson(SENDS_FILE, []);
   sends.unshift(record);

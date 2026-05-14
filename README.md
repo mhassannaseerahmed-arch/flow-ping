@@ -54,11 +54,15 @@ cd server && npm install && npm run dev
 cd web && npm install && npm run dev
 ```
 
+Vite serves the UI on port **5174** and proxies `/api`, `/u`, and `/health` to **http://localhost:5055**. Run the server first (or you will see “HTML instead of JSON” errors).
+
 ---
 
 ## 📡 Production (Vercel)
 
-The root `vercel.json` routes `/api` to Express and serves React as a static app. Vercel Crons trigger automation sequences hourly.
+Deploy from the **repository root** so the root `vercel.json` routes `/api` to Express and serves the Vite build. Vercel Crons trigger automation sequences hourly.
+
+If you deploy **only** the `web/` folder as its own Vercel project, set `VITE_EMAIL_HQ_API` at build time to your API’s public origin, or `/api` requests will miss the backend.
 
 ---
 
