@@ -42,19 +42,29 @@
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick start (standalone repo)
 
-**Backend:**
+Clone this repository **by itself** (it does not need to live inside another project):
+
+```bash
+git clone https://github.com/mhassannaseerahmed-arch/flow-ping.git
+cd flow-ping
+npm install
+npm run install:all
+npm run dev
+```
+
+This installs root tooling (`concurrently`), then dependencies in `server/` and `web/`, and runs **Express** (port **5055**) and **Vite** (port **5174**) together. Vite proxies `/api`, `/u`, and `/health` to the API in development.
+
+**Manual (two terminals):**
+
 ```bash
 cd server && npm install && npm run dev
 ```
 
-**Frontend:**
 ```bash
 cd web && npm install && npm run dev
 ```
-
-Vite serves the UI on port **5174** and proxies `/api`, `/u`, and `/health` to **http://localhost:5055**. Run the server first (or you will see “HTML instead of JSON” errors).
 
 ---
 
