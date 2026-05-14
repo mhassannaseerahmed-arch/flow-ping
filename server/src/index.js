@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import mongoose from 'mongoose';
 
+import { ensureConnected, mongoReadyState } from './connectDb.js';
 import { leadsRouter } from './routes/leads.js';
 import { templatesRouter } from './routes/templates.js';
 import { campaignsRouter } from './routes/campaigns.js';
@@ -14,19 +14,34 @@ import { runAutomationTick } from './automation.js';
 
 const app = express();
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (MONGODB_URI) {
-  mongoose.connect(MONGODB_URI)
-    .then(() => console.log('Connected to MongoDB Atlas'))
-    .catch(err => console.error('MongoDB connection error:', err));
-}
-
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
+// Wait for Mongo before any /api handler (fixes Lead.find() buffering on Vercel cold starts)
+app.use('/api', async (req, res, next) => {
+  try {
+    await ensureConnected();
+    next();
+  } catch (err) {
+    console.error('[MongoDB]', err.message);
+    res.status(503).json({
+      success: false,
+      message:
+        err.code === 'NO_URI'
+          ? err.message
+          : 'Database unavailable. Check MONGODB_URI and Atlas network access (allow 0.0.0.0/0 for Vercel while testing).',
+    });
+  }
+});
+
 app.get('/health', (req, res) => {
-  res.json({ ok: true, service: 'mailpilot-server' });
+  const states = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  res.json({
+    ok: true,
+    service: 'mailpilot-server',
+    mongoReadyState: mongoReadyState(),
+    mongoState: states[mongoReadyState()] ?? 'unknown',
+  });
 });
 
 app.get('/api/stream', sseHandler);
