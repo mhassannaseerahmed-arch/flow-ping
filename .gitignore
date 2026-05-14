@@ -25,3 +25,8 @@ server/data/sendStats.json
 .vscode/
 
 .vercel
+.env.vercel
+
+# One-off / local scripts (keep out of deploy commits)
+server/scratch/
+
